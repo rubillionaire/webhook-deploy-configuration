@@ -341,16 +341,41 @@ function Deploys ( bucketsRoot ) {
 
 		var bucketDeployToRemove = bucketForSiteName( opts.bucket );
 
-		bucketsRoot.child( siteNameForBucket( opts.siteName ) ).child( opts.key )
-			.child( 'dev/deploys' )
-			.transaction( removeBucketDeploy, onTransactionComplete )
+    var deploysRef = bucketsRoot.child( siteNameForBucket( opts.siteName ) ).child( opts.key ).child( 'dev/deploys' )
+
+    deploysRef
+      .once( 'value', function ( snapshot ) {
+        var deploys = snapshot.val();
+
+        if ( Array.isArray( deploys ) ) {
+
+          deploys = removeBucketDeploy( deploys )
+          if ( deploys ) {
+
+            deploysRef.set( deploys, function ( error ) {
+              if ( error ) callback( error )
+              else ( callback( null, deploys ) )
+            } )
+
+          } else callback ( new Error( 'Could not remove bucket from deploys.' ) )
+
+        } else callback( new Error( 'Deploys not found.' ) )
+
+      } )
+      // .transaction( removeBucketDeploy, onTransactionComplete )
 
 		/**
 		 * @param  {object} deploys The current deploys for the site.
 		 * @return {object|undefined} deploysToKeep The deploys after removing the specified bucket.
 		 */
 		function removeBucketDeploy ( deploys ) {
+			
+      console.log( 'removeBucketDeploy' )
+			console.log( deploys )
+			console.log( bucketDeployToRemove )
+
 			var deploysToKeep = undefined;
+      
 			try {
 				deploysToKeep = deploys.filter( function ( deploy ) {
 					return deploy.bucket !== bucketDeployToRemove;
