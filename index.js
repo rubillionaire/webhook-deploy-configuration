@@ -370,12 +370,8 @@ function Deploys ( bucketsRoot ) {
 		 */
 		function removeBucketDeploy ( deploys ) {
 			
-      console.log( 'removeBucketDeploy' )
-			console.log( deploys )
-			console.log( bucketDeployToRemove )
-
 			var deploysToKeep = undefined;
-      
+
 			try {
 				deploysToKeep = deploys.filter( function ( deploy ) {
 					return deploy.bucket !== bucketDeployToRemove;
