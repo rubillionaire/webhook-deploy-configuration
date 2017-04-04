@@ -503,6 +503,7 @@ function bucketForSiteName ( siteName ) {
 }
 
 function fileForSiteBranch ( site, branch ) {
+	branch = branch.replace( /\//g, '-' )
 	var fileName = [ site, branch ].join( '_' )
 	var fileExt = 'zip';
 	return [ fileName, fileExt ].join( '.' )

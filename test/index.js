@@ -105,11 +105,38 @@ test( 'deploys-connection', function ( t ) {
 				t.equal( error, null, 'Default configuration set without error.' )
 				t.deepEqual( configuration, expectedConfiguration, 'Set configuration matches expected default configuration.' );
 
-				next( )
+				next( null, extend( row, { deploys: configuration } ) )
+
 			} )
 		} )
 	}
 	testSetDefaultConfig.testCount = 2;
+
+	var testFileForSiteBranch = function () {
+		var testPairs = [
+			{ site: 'test,1risd,1systems', branch: 'master', expected: 'test,1risd,1systems_master.zip' },
+			{ site: 'test,1risd,1systems', branch: 'develop', expected: 'test,1risd,1systems_develop.zip' },
+			{ site: 'test,1risd,1systems', branch: 'feature/new-homepage', expected: 'test,1risd,1systems_feature-new-homepage.zip' }
+		]
+		return miss.through.obj( function ( row, enc, next ) {
+
+			testPairs.forEach( function ( testPair ) {
+				var fileName = Deploys.utilities.fileForSiteBranch( testPair.site, testPair.branch );
+				var message = [
+					'fileForSiteBranch produced expected file name',
+					testPair.expected,
+					'from site', testPair.site,
+					'and branch', testPair.branch
+				].join( ' ' );
+
+				t.equal( fileName, testPair.expected, message )
+			} )
+
+			next( null, row )
+
+		} )
+	}
+	testFileForSiteBranch.testCount = 3;
 
 	var testsToRun = [
 		setupDeploys,
@@ -117,7 +144,8 @@ test( 'deploys-connection', function ( t ) {
 		testSetConfiguration,
 		testSecondBucket,
 		// testSecondBucket,
-		testSetDefaultConfig
+		testSetDefaultConfig,
+		testFileForSiteBranch
 	];
 
 	runTests( testsToRun )
@@ -130,7 +158,7 @@ test( 'deploys-connection', function ( t ) {
 		t.plan( count )
 
 		miss.pipe.apply( null, tests
-				.map( function ( testFn ) { return testFn() }  )
+			.map( function ( testFn ) { return testFn() }  )
 				.concat( [ sink ] ) )
 
 		function sink ( error ) {
