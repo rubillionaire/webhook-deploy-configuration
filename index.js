@@ -9,6 +9,7 @@ module.exports.utilities = {
 	defaultBranch: function () {
 		return defaultBranch;
 	},
+	nameForSiteBranch: nameForSiteBranch,
 	fileForSiteBranch: fileForSiteBranch,
 }
 
@@ -502,9 +503,13 @@ function bucketForSiteName ( siteName ) {
 	return siteName.replace( /,1/g, '.' );
 }
 
-function fileForSiteBranch ( site, branch ) {
+function nameForSiteBranch ( site, branch ) {
 	branch = branch.replace( /\//g, '-' )
-	var fileName = [ site, branch ].join( '_' )
+	return [ site, branch ].join( '_' )
+}
+
+function fileForSiteBranch ( site, branch ) {
+	var fileName = nameForSiteBranch( site, branch )
 	var fileExt = 'zip';
 	return [ fileName, fileExt ].join( '.' )
 }
