@@ -51,16 +51,16 @@ Removes the deploy configuration
 
 ### Tests
 
-Include a `.env` file that has the following:
+Include a `.env.test` file that has the following:
 
 ```
 SITE_NAME=
 FIREBASE_NAME=
-FIREBASE_SECRET=
+FIREBASE_SERVICE_ACCOUNT_KEY=
 ```
 
 - `SITE_NAME` is the string that represends the webhook site name.
 - `FIREBASE_NAME` is the Firebase instance that the webhook system is running off of.
-- `FIREBASE_SECRET` is the Firebase API key that can be used to authenticate the Firebase instance.
+- `FIREBASE_SECRET` is the path to the Firebase Service Account credentials that can be used to authenticate the Firebase instance.
 
-With that in place, `npm run test` to run the tests.
+With that in place, and an existing webhook site by the name of the given `SITE_NAME`, `npm run test` to run the tests.
