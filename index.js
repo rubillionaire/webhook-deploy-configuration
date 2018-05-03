@@ -1,4 +1,3 @@
-var fs = require('fs');
 var miss = require('mississippi');
 var extend = require('xtend');
 
@@ -17,10 +16,10 @@ module.exports.utilities = {
 /**
  * Manage deploy configuration.
  * 
- * @param {object}  bucketsRoot      Webhook firebase ref set to `/buckets`
+ * @param {object}  firebaseRoot      Webhook firebase database ref
  */
-function Deploys ( bucketsRoot ) {
-  if ( ! ( this instanceof Deploys ) ) return new Deploys( bucketsRoot );
+function Deploys ( firebaseRoot ) {
+  if ( ! ( this instanceof Deploys ) ) return new Deploys( firebaseRoot );
 
   var noDeployConfigurationError = new Error( 'No deploy configuration.' );
   var siteDoesNotExistError = new Error( 'Site does not exist in Firebase.' );
@@ -44,7 +43,7 @@ function Deploys ( bucketsRoot ) {
 	 */
 	function getKeyForSite ( siteName, callback )  {
 		try {
-			bucketsRoot.root().child('/management/sites')
+			firebaseRoot.ref('management/sites')
 				.child(siteName)
 				.child('key')
 				.once('value',
@@ -84,7 +83,7 @@ function Deploys ( bucketsRoot ) {
 	 */
 	function getDeploysForSiteAndKey ( siteName, key, callback ) {
 		try {
-			bucketsRoot.child(siteName)
+			firebaseRoot.ref(siteName)
 				.child(key)
 				.child('dev/deploys')
 				.once('value',
@@ -202,7 +201,7 @@ function Deploys ( bucketsRoot ) {
 		if ( ! ( areValidSetterOpts(opts) ) )
 			callback( new Error( 'Options for deploys.setter not valid.' ) )
 
-		bucketsRoot.child( opts.siteName ).child( opts.key )
+		firebaseRoot.ref( 'buckets' ).child( opts.siteName ).child( opts.key )
 			.child('dev/deploys')
 			.set( bucketNamesForSiteNames( opts.deploys ), callback );
 
@@ -342,7 +341,7 @@ function Deploys ( bucketsRoot ) {
 
 		var bucketDeployToRemove = bucketForSiteName( opts.bucket );
 
-    var deploysRef = bucketsRoot.child( siteNameForBucket( opts.siteName ) ).child( opts.key ).child( 'dev/deploys' )
+    var deploysRef = firebaseRoot.ref( 'buckets' ).child( siteNameForBucket( opts.siteName ) ).child( opts.key ).child( 'dev/deploys' )
 
     deploysRef
       .once( 'value', function ( snapshot ) {
@@ -441,7 +440,7 @@ function Deploys ( bucketsRoot ) {
 
 		var defaultDeployConfiguration = defaultConfiguration( opts.siteName )
 
-		bucketsRoot.child( siteNameForBucket( opts.siteName ) ).child( opts.key )
+		firebaseRoot.ref( 'buckets' ).child( siteNameForBucket( opts.siteName ) ).child( opts.key )
 			.child( 'dev/deploys' )
 			.set( defaultDeployConfiguration, onSetComplete );
 

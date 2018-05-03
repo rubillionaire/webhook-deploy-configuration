@@ -1,6 +1,12 @@
-require( 'dotenv' ).config() // load `.env` into process.env
+var path = require( 'path' )
+// load `.env.test` into process.env
+require( 'dotenv-safe' ).config( {
+	allowEmptyValues: true,
+  path: path.join( process.cwd(), '.env.test' ),
+  sample: path.join( process.cwd(), '.env.test.example' ),
+} )
 
-var Firebase = require( 'firebase' )
+var FirebaseAdmin = require( 'firebase-admin' )
 var miss = require( 'mississippi' )
 var extend = require( 'xtend' )
 var Deploys = require( '../index.js' )
@@ -11,22 +17,28 @@ test.onFinish( function () { process.exit() } )
 test( 'deploys-connection', function ( t ) {
 
 	var siteName = process.env.SITE_NAME;
+	var firebaseOptions = {
+		databaseURL: 'https://' + process.env.FIREBASE_NAME + '.firebaseio.com',
+		credential: FirebaseAdmin.credential.cert( process.env.FIREBASE_SERVICE_ACCOUNT_KEY ),
+	}
 
 	var deploys = null;
 	var setupDeploys = function authFirebaseAndInitDeploys () {
-		var firebaseName = process.env.FIREBASE_NAME
-		var firebaseSecret = process.env.FIREBASE_SECRET
 
-		var bucketsRoot = new Firebase( 'https://' + firebaseName + '.firebaseio.com/buckets' )
+		var firebase = FirebaseAdmin.initializeApp( firebaseOptions )
+		var firebaseRoot = firebase.database()
+
+		deploys = Deploys( firebaseRoot )
 
 		var stream = miss.through.obj();
-		bucketsRoot.auth( firebaseSecret, function ( error ) {
-			t.equal( error, null, 'Connected to firebase.' )
+
+		process.nextTick( function () {
+			t.assert( typeof deploys === 'object', 'Deploys object setup.' )
 			
-			deploys = Deploys( bucketsRoot )
 			stream.push( { siteName: siteName } )
 			stream.push( null )
 		} )
+		
 
 		return stream;
 	}
