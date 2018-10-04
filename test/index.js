@@ -92,6 +92,20 @@ test( 'deploys-connection', function ( t ) {
 	}
 	testSecondBucket.testCount = 2;
 
+	var testNonDefaultBucketConfig = function () {
+		return miss.through.obj( function ( row, enc, next ) {
+
+			deploys.get( { siteName: row.siteName }, function ( error, retrievedConfiguration ) {
+				t.equal( error, null, 'Got second set of configuration without error.' )
+				t.deepEqual( retrievedConfiguration.deploys, row.deploys, 'The non-default configuration set is equal to the configuration retrieved.')
+
+				next( null, row )
+			} )
+
+		} )
+	}
+	testNonDefaultBucketConfig.testCount = 2;
+
 	var testRemoveSecondBucketConfig = function () {
 		return miss.through.obj ( function ( row, enc, next ) {
 			var opts = { siteName: row.siteName, key: row.key, bucket: secondDeployConfiguration.bucket }
@@ -155,7 +169,7 @@ test( 'deploys-connection', function ( t ) {
 		testDefaultConfiguration,
 		testSetConfiguration,
 		testSecondBucket,
-		// testSecondBucket,
+		testNonDefaultBucketConfig,
 		testSetDefaultConfig,
 		testFileForSiteBranch
 	];
