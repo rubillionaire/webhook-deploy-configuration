@@ -83,7 +83,8 @@ function Deploys ( firebaseRoot ) {
 	 */
 	function getDeploysForSiteAndKey ( siteName, key, callback ) {
 		try {
-			firebaseRoot.ref(siteName)
+			firebaseRoot.ref('buckets')
+				.child(siteName)
 				.child(key)
 				.child('dev/deploys')
 				.once('value',
