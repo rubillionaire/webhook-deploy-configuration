@@ -1,4 +1,5 @@
 .DS_Store
 .env.test
+.firebase-service-account.json
 node_modules
 npm-debug.log
