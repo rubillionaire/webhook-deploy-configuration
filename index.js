@@ -44,7 +44,7 @@ function Deploys ( firebaseRoot ) {
 	function getKeyForSite ( siteName, callback )  {
 		try {
 			firebaseRoot.ref('management/sites')
-				.child(siteName)
+				.child(siteNameForBucket( siteName ))
 				.child('key')
 				.once('value',
 					function success ( snapshot ) {
@@ -84,7 +84,7 @@ function Deploys ( firebaseRoot ) {
 	function getDeploysForSiteAndKey ( siteName, key, callback ) {
 		try {
 			firebaseRoot.ref('buckets')
-				.child(siteName)
+				.child(siteNameForBucket( siteName ))
 				.child(key)
 				.child('dev/deploys')
 				.once('value',
@@ -202,7 +202,7 @@ function Deploys ( firebaseRoot ) {
 		if ( ! ( areValidSetterOpts(opts) ) )
 			callback( new Error( 'Options for deploys.setter not valid.' ) )
 
-		firebaseRoot.ref( 'buckets' ).child( opts.siteName ).child( opts.key )
+		firebaseRoot.ref( 'buckets' ).child(siteNameForBucket(opts.siteName)).child( opts.key )
 			.child('dev/deploys')
 			.set( bucketNamesForSiteNames( opts.deploys ), callback );
 
@@ -342,7 +342,7 @@ function Deploys ( firebaseRoot ) {
 
 		var bucketDeployToRemove = bucketForSiteName( opts.bucket );
 
-    var deploysRef = firebaseRoot.ref( 'buckets' ).child( siteNameForBucket( opts.siteName ) ).child( opts.key ).child( 'dev/deploys' )
+    var deploysRef = firebaseRoot.ref( 'buckets' ).child(siteNameForBucket( opts.siteName ) ).child( opts.key ).child( 'dev/deploys' )
 
     deploysRef
       .once( 'value', function ( snapshot ) {
