@@ -138,6 +138,24 @@ test( 'deploys-connection', function ( t ) {
 	}
 	testSetDefaultConfig.testCount = 2;
 
+	var testNoDuplicateSet = function () {
+		return miss.through.obj( function ( row, enc, next ) {
+			var opts = { siteName: row.siteName, key: row.key, deploy: { branch: 'master', bucket: row.siteName } }
+			var expectedConfiguration = {
+				siteName: row.siteName,
+				key: row.key,
+				deploys: [ { branch: 'master', bucket: Deploys.utilities.bucketForSiteName( row.siteName ) } ],
+			}
+
+			deploys.setBucket( opts, function ( error, configuration ) {
+				t.equal( error, null, 'Dupe default configuration set without error' )
+				t.deepEqual( configuration, expectedConfiguration, 'Dupe prevented' )
+				next( null, row )
+			} )
+		} )
+	}
+	testNoDuplicateSet.testCount = 2;
+
 	var testFileForSiteBranch = function () {
 		var testPairs = [
 			{ site: 'test,1risd,1systems', branch: 'master', expected: 'test,1risd,1systems_master.zip' },
@@ -171,7 +189,8 @@ test( 'deploys-connection', function ( t ) {
 		testSecondBucket,
 		testNonDefaultBucketConfig,
 		testSetDefaultConfig,
-		testFileForSiteBranch
+		testNoDuplicateSet,
+		testFileForSiteBranch,
 	];
 
 	runTests( testsToRun )
