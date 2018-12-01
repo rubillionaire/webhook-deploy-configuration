@@ -10,6 +10,8 @@ module.exports.utilities = {
 	},
 	nameForSiteBranch: nameForSiteBranch,
 	fileForSiteBranch: fileForSiteBranch,
+	siteNameForBucket: siteNameForBucket,
+	bucketForSiteName: bucketForSiteName,
 }
 
 
@@ -265,7 +267,7 @@ function Deploys ( firebaseRoot ) {
 				try {
 					var matchingDeployIndices = row.deploys
 						.map( function configIndexForBranch ( deploy, configIndex ) {
-							if ( deploy.bucket === deployOptions.bucket ) return configIndex;
+							if ( bucketForSiteName( deploy.bucket ) === bucketForSiteName( deployOptions.bucket ) ) return configIndex;
 							else return null;
 						} )
 						.filter( function isNumber ( configIndex ) {
