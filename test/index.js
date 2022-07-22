@@ -5,8 +5,15 @@ require( 'dotenv-safe' ).config( {
   path: path.join( process.cwd(), '.env.test' ),
   sample: path.join( process.cwd(), '.env.test.example' ),
 } )
-
-var FirebaseAdmin = require( 'firebase-admin' )
+const { initializeApp } = require('firebase/app')
+const {
+  getDatabase,
+  ref,
+} = require('firebase/database')
+const {
+	getAuth,
+	signInWithEmailAndPassword,
+} = require('firebase/auth')
 var miss = require( 'mississippi' )
 var extend = require( 'xtend' )
 var Deploys = require( '../index.js' )
@@ -14,23 +21,30 @@ var test = require( 'tape' )
 
 test.onFinish( function () { process.exit() } )
 
+
+
+var siteName = process.env.SITE_NAME;
+var firebaseOptions = {
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: `${ process.env.FIREBASE_NAME }.firebaseapp.com`,
+  databaseURL: `${ process.env.FIREBASE_NAME }.firebaseio.com`,
+}
+
+const email = process.env.WEBHOOK_EMAIL
+const password = process.env.WEBHOOK_PASSWORD
+
 test( 'deploys-connection', function ( t ) {
 
-	var siteName = process.env.SITE_NAME;
-	var firebaseOptions = {
-		databaseURL: 'https://' + process.env.FIREBASE_NAME + '.firebaseio.com',
-		credential: FirebaseAdmin.credential.cert( process.env.FIREBASE_SERVICE_ACCOUNT_KEY ),
-	}
-
 	var deploys = null;
+
+	const app = initializeApp(firebaseOptions)
+	const dbRef = ref(getDatabase(app))
+	const auth = getAuth(app)
+
 	var setupDeploys = function authFirebaseAndInitDeploys () {
+		deploys = Deploys(dbRef)
 
-		var firebase = FirebaseAdmin.initializeApp( firebaseOptions )
-		var firebaseRoot = firebase.database()
-
-		deploys = Deploys( firebaseRoot )
-
-		var stream = miss.through.obj();
+		const stream = miss.through.obj()
 
 		process.nextTick( function () {
 			t.assert( typeof deploys === 'object', 'Deploys object setup.' )
@@ -44,10 +58,23 @@ test( 'deploys-connection', function ( t ) {
 	}
 	setupDeploys.testCount = 1;
 
+	const signIntoFirebase = function () {
+		return miss.through.obj(function (row, enc, next) {
+			signInWithEmailAndPassword(auth, email, password)
+				.then(() => {
+					t.ok(true, 'Logged into firebase')
+					next(null, row)
+				})
+				.catch((error) => {
+					throw error
+				})
+		})
+	}
+	signIntoFirebase.testCount = 1
+
 	var testDefaultConfiguration = function () {
 		return miss.through.obj( function ( row, enc, next ) {
 			deploys.get( { siteName: siteName }, function ( error, configuration ) {
-				
 				t.equal( error, null, 'Got default configuration without error.' )
 				t.deepEqual( configuration.deploys, deploys.default( siteName ), 'Matching default configuration.' )
 				
@@ -58,12 +85,12 @@ test( 'deploys-connection', function ( t ) {
 	testDefaultConfiguration.testCount = 2;
 
 	var testSetConfiguration = function () {
-		return miss.through.obj( function ( row, enc, next ) {
-			deploys.set( row, function ( error ) {
+		return miss.through.obj( function ( deployConfiguration, enc, next ) {
+			deploys.set( deployConfiguration, function ( error ) {
 				
 				t.equal( error, null, 'Deploys set without error.' )
 				
-				next( null, row )
+				next( null, deployConfiguration )
 			} )
 		} )
 	}
@@ -184,6 +211,7 @@ test( 'deploys-connection', function ( t ) {
 
 	var testsToRun = [
 		setupDeploys,
+		signIntoFirebase,
 		testDefaultConfiguration,
 		testSetConfiguration,
 		testSecondBucket,
