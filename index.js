@@ -1,5 +1,10 @@
 var miss = require('mississippi');
 var extend = require('xtend');
+const {
+  child,
+  get,
+  set,
+} = require('firebase/database')
 
 var defaultBranch = 'master';
 
@@ -18,13 +23,17 @@ module.exports.utilities = {
 /**
  * Manage deploy configuration.
  * 
- * @param {object}  firebaseRoot      Webhook firebase database ref
+ * @param {object}  firebaseRootRef      Firebase Database ref
  */
-function Deploys ( firebaseRoot ) {
-  if ( ! ( this instanceof Deploys ) ) return new Deploys( firebaseRoot );
+function Deploys ( firebaseRootRef ) {
+  if ( ! ( this instanceof Deploys ) ) return new Deploys( firebaseRootRef );
 
   var noDeployConfigurationError = new Error( 'No deploy configuration.' );
   var siteDoesNotExistError = new Error( 'Site does not exist in Firebase.' );
+
+  const deploysKeyString = ({ siteName, key }) => {
+  	return `buckets/${siteNameForBucket(siteName)}/${key}/dev/deploys`
+  }
 
 	return {
 		get: getFirebaseConfiguration,
@@ -44,17 +53,16 @@ function Deploys ( firebaseRoot ) {
 	 * @return {undefined}
 	 */
 	function getKeyForSite ( siteName, callback )  {
+		const keyString = `management/sites/${siteNameForBucket(siteName)}/key`
+		const keyChild = child(firebaseRootRef, keyString)
 		try {
-			firebaseRoot.ref('management/sites')
-				.child(siteNameForBucket( siteName ))
-				.child('key')
-				.once('value',
-					function success ( snapshot ) {
-						callback( undefined, snapshot.val() )
-					},
-					function ( error ) {
-						callback( error )
-					})
+			get(keyChild)
+				.then(snapshot => {
+					callback(undefined, snapshot.val())
+				})
+				.catch(error => {
+					callback(error)
+				})
 		} catch ( error ) {
 			callback( siteDoesNotExistError )
 		}
@@ -84,24 +92,22 @@ function Deploys ( firebaseRoot ) {
 	 * @return {undefined}
 	 */
 	function getDeploysForSiteAndKey ( siteName, key, callback ) {
+		const keyString = deploysKeyString({ siteName, key })
+		const keyChild = child(firebaseRootRef, keyString)
 		try {
-			firebaseRoot.ref('buckets')
-				.child(siteNameForBucket( siteName ))
-				.child(key)
-				.child('dev/deploys')
-				.once('value',
-					function onSnapshot (snapshot) {
-						var firebaseConfiguration = snapshot.val();
+			get(keyChild)
+				.then(snapshot => {
+					var firebaseConfiguration = snapshot.val();
 
-						if ( areValidDeploys( firebaseConfiguration ) ) callback( undefined, firebaseConfiguration )
-						else callback( noDeployConfigurationError )
-					},
-					function onError (err) {
-						callback( noDeployConfigurationError )
-					});
+					if (areValidDeploys(firebaseConfiguration)) callback(undefined, firebaseConfiguration)
+					else callback(noDeployConfigurationError)
+				})
+				.catch(error => {
+					callback(noDeployConfigurationError)
+				})
 		}
-		catch ( error ) {
-			callback( siteDoesNotExistError )
+		catch (error) {
+			callback(siteDoesNotExistError)
 		}
 	}
 
@@ -202,11 +208,15 @@ function Deploys ( firebaseRoot ) {
 	 */
 	function setFirebaseConfiguration ( opts, callback ) {
 		if ( ! ( areValidSetterOpts(opts) ) )
-			callback( new Error( 'Options for deploys.setter not valid.' ) )
+			return callback( new Error( 'Options for deploys.setter not valid.' ) )
 
-		firebaseRoot.ref( 'buckets' ).child(siteNameForBucket(opts.siteName)).child( opts.key )
-			.child('dev/deploys')
-			.set( bucketNamesForSiteNames( opts.deploys ), callback );
+		const { siteName, key } = opts
+		const keyString = deploysKeyString({ siteName, key })
+		const keyChild = child(firebaseRootRef, keyString)
+
+		set(keyChild, bucketNamesForSiteNames(opts.deploys))
+			.then(() => callback(null))
+			.catch(error => callback(error))
 
 		// local validation
 		function areValidSetterOpts (opts) {
@@ -344,28 +354,26 @@ function Deploys ( firebaseRoot ) {
 
 		var bucketDeployToRemove = bucketForSiteName( opts.bucket );
 
-    var deploysRef = firebaseRoot.ref( 'buckets' ).child(siteNameForBucket( opts.siteName ) ).child( opts.key ).child( 'dev/deploys' )
+		const { siteName, key } = opts
+		const keyString = deploysKeyString({ siteName, key })
+		const keyChild = child(firebaseRootRef, keyString)
 
-    deploysRef
-      .once( 'value', function ( snapshot ) {
-        var deploys = snapshot.val();
+		get(keyChild)
+			.then(snapshot => {
+				var deploys = snapshot.val();
 
-        if ( Array.isArray( deploys ) ) {
-
+        if (Array.isArray(deploys)) {
           deploys = removeBucketDeploy( deploys )
-          if ( deploys ) {
-
-            deploysRef.set( deploys, function ( error ) {
-              if ( error ) callback( error )
-              else ( callback( null, deploys ) )
-            } )
-
-          } else callback ( new Error( 'Could not remove bucket from deploys.' ) )
-
-        } else callback( new Error( 'Deploys not found.' ) )
-
-      } )
-      // .transaction( removeBucketDeploy, onTransactionComplete )
+          if (deploys) {
+            set(keyChild, deploys)
+            	.then(() => callback(null, deploys))
+            	.catch(error => callback(error))
+          }
+          else callback (new Error('Could not remove bucket from deploys.' ))
+        }
+      	else callback(new Error('Deploys not found.'))
+			})
+			.catch(error => callback(error))
 
 		/**
 		 * @param  {object} deploys The current deploys for the site.
@@ -373,7 +381,7 @@ function Deploys ( firebaseRoot ) {
 		 */
 		function removeBucketDeploy ( deploys ) {
 			
-			var deploysToKeep = undefined;
+			let deploysToKeep = undefined
 
 			try {
 				deploysToKeep = deploys.filter( function ( deploy ) {
@@ -438,14 +446,18 @@ function Deploys ( firebaseRoot ) {
 	 * @return {undefined}
 	 */
 	function setDefaultFirebaseConfiguration ( opts, callback ) {
-		var validatedOptions = areValidRemoveBucketOpts( opts )
+		var validatedOptions = areValidDefaultBucketOpts( opts )
 		if ( validatedOptions instanceof Error ) return callback( validatedOptions )
 
 		var defaultDeployConfiguration = defaultConfiguration( opts.siteName )
 
-		firebaseRoot.ref( 'buckets' ).child( siteNameForBucket( opts.siteName ) ).child( opts.key )
-			.child( 'dev/deploys' )
-			.set( defaultDeployConfiguration, onSetComplete );
+		const { siteName, key } = opts
+		const keyString = deploysKeyString({ siteName, key })
+		const keyChild = child(firebaseRootRef, keyString)
+
+		set(keyChild, defaultDeployConfiguration)
+			.then(() => onSetComplete())
+			.catch(error => onSetComplete(error))
 
 		/**
 		 * @param  {object?}     opts
@@ -453,7 +465,7 @@ function Deploys ( firebaseRoot ) {
 		 * @param  {string?}     opts.key
 		 * @return {true|Error}
 		 */
-		function areValidRemoveBucketOpts( opts ) {
+		function areValidDefaultBucketOpts( opts ) {
 
 			var errorMessage = [
 				'Setting default configuration requires ',
