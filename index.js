@@ -1,5 +1,3 @@
-var miss = require('mississippi');
-var extend = require('xtend');
 const {
   child,
   get,
@@ -48,38 +46,19 @@ function Deploys ( firebaseRootRef ) {
 	/**
 	 * Return the site key for a given `siteName`.
 	 * 
-	 * @param  {string}
+	 * @param  {string} siteName
 	 * @param  {Function}
-	 * @return {undefined}
+	 * @return {string} key
 	 */
-	function getKeyForSite ( siteName, callback )  {
+	async function getKeyForSite (siteName)  {
 		const keyString = `management/sites/${siteNameForBucket(siteName)}/key`
 		const keyChild = child(firebaseRootRef, keyString)
 		try {
-			get(keyChild)
-				.then(snapshot => {
-					callback(undefined, snapshot.val())
-				})
-				.catch(error => {
-					callback(error)
-				})
+			const keySnapshot = await get(keyChild)
+			return keySnapshot.val()
 		} catch ( error ) {
-			callback( siteDoesNotExistError )
+			throw siteDoesNotExistError
 		}
-	}
-
-	/**
-	 * Transform stream wrapper around `getKeyForSite`.
-	 * 
-	 * @return {object}
-	 */
-	function getKeyForSiteStream () {
-		return miss.through.obj( function ( row, enc, next) {
-			getKeyForSite( row.siteName, function onKey ( error, key ) {
-				if ( error ) next( error )
-				else next( null, extend( row, { key: key } ) )
-			} )
-		} )
 	}
 
 	/**
@@ -89,73 +68,21 @@ function Deploys ( firebaseRootRef ) {
 	 * @param  {string}    siteName
 	 * @param  {string}    key
 	 * @param  {Function}  callback
-	 * @return {undefined}
+	 * @return {object} deployConfiguration
 	 */
-	function getDeploysForSiteAndKey ( siteName, key, callback ) {
+	async function getDeploysForSiteAndKey (siteName, key) {
 		const keyString = deploysKeyString({ siteName, key })
 		const keyChild = child(firebaseRootRef, keyString)
 		try {
-			get(keyChild)
-				.then(snapshot => {
-					var firebaseConfiguration = snapshot.val();
-
-					if (areValidDeploys(firebaseConfiguration)) callback(undefined, firebaseConfiguration)
-					else callback(noDeployConfigurationError)
-				})
-				.catch(error => {
-					callback(noDeployConfigurationError)
-				})
+			const deployConfigurationSnapshot = await get(keyChild)
+			const deployConfiguration = deployConfigurationSnapshot.val()
+			if (areValidDeploys(firebaseConfiguration)) return deployConfiguration
+			else return defaultConfiguration(siteName)
 		}
 		catch (error) {
-			callback(siteDoesNotExistError)
+			throw siteDoesNotExistError
 		}
 	}
-
-	/**
-	 * Transform stream wrapper around `getDeploysForSiteAndKey`
-	 * @return {object}
-	 */
-	function getDeploysForSiteAndKeyStream () {
-		return miss.through.obj( function ( row, enc, next ) {
-			getDeploysForSiteAndKey( row.siteName, row.key, function ( error, configuration ) {
-				if ( error ) configuration = defaultConfiguration( row.siteName );
-				next( null, extend( row, { deploys: configuration } ) )
-			} )
-		} )
-	}
-
-	/**
-	 * Expects an `opts` object that contains at least a `siteName`.
-	 * If an `key` is provided, that will not be queried for.
-	 * 
-	 * Returns a series of streams that can be piped together to produce
-	 * an object that contains `{ siteName, key, deploys }` keys.
-	 * Where `siteName` is the name of the site, `key` is its authentication
-	 * key, and `deploys` is an array of deploy configuration.
-	 * 
-	 * @param  {object} opts
-	 * @param  {string} opts.siteName
-	 * @param  {string} opts.key
-	 * @return {object} pipeline Array of streams to pipe together
-	 */
-	function getDeploysStreamsPipeline ( opts ) {
-		var pipeline = [ source( opts ) ];
-
-		if ( ! ( isStringWithLength( opts.key ) ) )
-			pipeline = pipeline.concat([ getKeyForSiteStream() ])
-
-		pipeline = pipeline.concat([ getDeploysForSiteAndKeyStream() ])
-
-		return pipeline;
-
-		function source( opts ) {
-			return miss.from.obj([{
-				siteName: siteNameForBucket( opts.siteName ),
-				key: opts.key || null
-			}, null]);
-		}
-	}
-
 
 	/**
 	 * Get the deploy configuration in the firebase bucket tree.
@@ -164,35 +91,17 @@ function Deploys ( firebaseRootRef ) {
 	 * @param  {object}    opts          [description]
 	 * @param  {string}    opts.siteName [description]
 	 * @param  {string?}   opts.key      [description]
-	 * @param  {function}  Callback with deploy settings
-	 * @return {undefined}
+	 * @return {object}  { ...opts, deploys }
 	 */
-	function getFirebaseConfiguration ( opts, callback ) {
-		if ( typeof opts !== 'object' ) opts = {};
-		if ( ! ( isStringWithLength( opts.siteName ) ) )
-			return callback( new Error( 'Requires site name.' ) )
+	async function getFirebaseConfiguration (opts={}) {
+		if (!(isStringWithLength( opts.siteName ))) throw new Error( 'Requires site name.' )
 
-		var pipeline = getDeploysStreamsPipeline( opts );
-
-		pipeline = pipeline.concat([
-			onSuccess( callback ),
-			onError( callback )
-		]);
-
-		return miss.pipe.apply( null, pipeline )
-
-		function onSuccess ( callback ) {
-			return miss.through.obj( function ( row, enc, next ) {
-				callback( null, row );
-				next();
-			} )
+		if (!opts.key) {
+			opts.key = await getKeyForSite(opts.siteName)
 		}
 
-		function onError ( callback ) {
-			return function captureError ( error ) {
-				if ( error ) callback( error )
-			}
-		}	
+		const deploys = await getDeploysForSiteAndKey(opts.siteName, opts.key)
+		return { ...opts, deploys }
 	}
 
 	/**
@@ -201,56 +110,37 @@ function Deploys ( firebaseRootRef ) {
 	 * @param  {object}   opts
 	 * @param  {string}   opts.siteName
 	 * @param  {string}   opts.key
-	 * @param  {object}   opts.deploys
-	 * @param  {string}   opts.deploys[].buckets
-	 * @param  {function} Callback with error if could not be set
-	 * @return {undefined}
+	 * @param  {array}   opts.deploys
+	 * @param  {string}   opts.deploys[].bucket
+	 * @param  {string}   opts.deploys[].branch
+	 * @return {object}  { ...opts, deploys }
 	 */
-	function setFirebaseConfiguration ( opts, callback ) {
-		if ( ! ( areValidSetterOpts(opts) ) )
-			return callback( new Error( 'Options for deploys.setter not valid.' ) )
+	async function setFirebaseConfiguration (opts) {
+		if (!(areValidSetterOpts(opts))) throw new Error( 'Options for deploys.setter not valid.' )
 
 		const { siteName, key } = opts
 		const keyString = deploysKeyString({ siteName, key })
 		const keyChild = child(firebaseRootRef, keyString)
 
-		set(keyChild, bucketNamesForSiteNames(opts.deploys))
-			.then(() => callback(null))
-			.catch(error => callback(error))
+		const deploys = bucketNamesForSiteNames(opts.deploys)
+		await set(keyChild, deploys)
+
+		return { ...opts, deploys }
 
 		// local validation
 		function areValidSetterOpts (opts) {
 			var isValid = false;
 
 			try {
-				isValid = isStringWithLength( opts.siteName ) &&
-					isStringWithLength( opts.key ) &&
-					areValidDeploys( opts.deploys )
+				isValid = isStringWithLength(opts.siteName) &&
+					isStringWithLength(opts.key) &&
+					areValidDeploys(opts.deploys)
 			} catch ( error ) {
-				// console.log( error )
+				// continue
 			}
 			return isValid;
 		}
 	}
-
-	/**
-	 * Transform stream wrapper around `setFirebaseConfiguration`
-	 */
-	function setFirebaseConfigurationStream () {
-		return miss.through.obj( function( row, enc, next ) {
-			try {
-				setFirebaseConfiguration(
-					{ siteName: row.siteName, key: row.key, deploys: row.deploys },
-					function onSet ( error ) {
-						if ( error ) next( error )
-						else next( null, row )
-					} )
-			} catch ( error ) {
-				next( error )
-			}
-		} )
-	}
-
 	/**
 	 * @param {object}    opts
 	 * @param {string}    opts.siteName  The site to set configuration for
@@ -258,63 +148,43 @@ function Deploys ( firebaseRootRef ) {
 	 * @param {object}    opts.deploy    The deploy configuration to use
 	 * @param {string}    opts.deploy.bucket    The bucket to deploy to.
 	 * @param {string}    opts.deploy.branch    The branch of templates to use in deploying.
-	 * @param {undefined}
 	 */
-	function setBucketConfiguration ( opts, callback ) {
-		if ( ! ( areValidBucketSetterOpts( opts ) ) )
-			return callback( new Error( 'Options for deploys.setter not valid.' ) )
+	async function setBucketConfiguration (opts) {
+		if (!( areValidBucketSetterOpts(opts))) throw new Error('Options for deploys.setter not valid.')
 
-		var pipeline = getDeploysStreamsPipeline( opts )
-			.concat([ updateConfigurationStream( opts.deploy ),
-				        setFirebaseConfigurationStream(),
-				        onSuccess( callback ),
-				        onError( callback ) ]);
+		const deploys = await getDeploysForSiteAndKey(opts.siteName, opts.key)
 
-		return miss.pipe.apply( null, pipeline );
+		const matchingDeployIndices = deploys
+			.map(function configIndexForBranch (deploy, configIndex) {
+				if (bucketForSiteName(deploy.bucket) === bucketForSiteName(opts.deploy.bucket)) return configIndex
+				else return null
+			})
+			.filter(function isNumber (configIndex) {
+				return typeof configIndex === 'number'
+			})
 
-		function updateConfigurationStream ( deployOptions ) {
-			return miss.through.obj( function ( row, enc, next ) {
-				try {
-					var matchingDeployIndices = row.deploys
-						.map( function configIndexForBranch ( deploy, configIndex ) {
-							if ( bucketForSiteName( deploy.bucket ) === bucketForSiteName( deployOptions.bucket ) ) return configIndex;
-							else return null;
-						} )
-						.filter( function isNumber ( configIndex ) {
-							return typeof configIndex === 'number'
-						} )
+		// defaults to adding to the end of the array
+		var indexToUpdate = deploys.length;
+		// defaults to an empty object
+		var currentConfiguration = {};
+		var configurationToSet = { ...opts.deploy }
 
-					// defaults to adding to the end of the array
-					var indexToUpdate = row.deploys.length;
-					// defaults to an empty object
-					var currentConfiguration = {};
-					var configurationToSet = extend( {}, deployOptions )
-
-					if ( matchingDeployIndices.length === 1  ) {
-						indexToUpdate = matchingDeployIndices[ 0 ];
-						currentConfiguration = row.deploys[ indexToUpdate ];
-					}
-
-					row.deploys[ indexToUpdate ] = extend( currentConfiguration, configurationToSet )
-
-					next( null,  row )
-				} catch ( error ) {
-					next( error )
-				}
-			} )
+		if (matchingDeployIndices.length === 1) {
+			indexToUpdate = matchingDeployIndices[0];
+			currentConfiguration = deploys[indexToUpdate];
 		}
 
-		function onSuccess ( callback ) {
-			return miss.through.obj( function ( row, enc, next ) {
-				callback( null, row )
-				next();
-			} )
+		deploys[indexToUpdate] = {
+			...currentConfiguration,
+			...configurationToSet,
 		}
 
-		function onError ( callback ) {
-			return function captureError ( error ) {
-				if ( error ) callback( error )
-			}
+		await setFirebaseConfiguration({ ...opts, deploys })
+
+		return {
+			siteName: opts.siteName,
+			key: opts.key,
+			deploys,
 		}
 
 		// local validation
@@ -345,35 +215,33 @@ function Deploys ( firebaseRootRef ) {
 	 * @param  {string}    opts.siteName
 	 * @param  {string}    opts.key
 	 * @param  {string}    opts.bucket
-	 * @param  {Function}  callback
 	 * @return {undefined}
 	 */
-	function removeBucketFirebaseConfiguration ( opts, callback ) {
-		var validatedOptions = areValidRemoveBucketOpts( opts )
-		if ( validatedOptions instanceof Error ) return callback( validatedOptions )
+	async function removeBucketFirebaseConfiguration (opts) {
+		var validatedOptions = areValidRemoveBucketOpts(opts)
+		if (validatedOptions instanceof Error) throw validatedOptions
 
-		var bucketDeployToRemove = bucketForSiteName( opts.bucket );
+		var bucketDeployToRemove = bucketForSiteName(opts.bucket)
 
 		const { siteName, key } = opts
 		const keyString = deploysKeyString({ siteName, key })
 		const keyChild = child(firebaseRootRef, keyString)
 
-		get(keyChild)
-			.then(snapshot => {
-				var deploys = snapshot.val();
-
-        if (Array.isArray(deploys)) {
-          deploys = removeBucketDeploy( deploys )
-          if (deploys) {
-            set(keyChild, deploys)
-            	.then(() => callback(null, deploys))
-            	.catch(error => callback(error))
-          }
-          else callback (new Error('Could not remove bucket from deploys.' ))
+		const deploysSnapshot = await get(keyChild)
+		let deploys = deploysSnapshot.val()
+		if (Array.isArray(deploys)) {
+      deploys = removeBucketDeploy(deploys)
+      if (deploys) {
+        await set(keyChild, deploys)
+        return {
+        	siteName: opts.siteName,
+        	key: opts.siteKey,
+        	deploys,
         }
-      	else callback(new Error('Deploys not found.'))
-			})
-			.catch(error => callback(error))
+      }
+      else throw new Error('Could not remove bucket from deploys.')
+    }
+  	else throw new Error('Deploys not found.')
 
 		/**
 		 * @param  {object} deploys The current deploys for the site.
@@ -391,15 +259,9 @@ function Deploys ( firebaseRootRef ) {
 				if ( deploysToKeep.length === ( deploys.length - 1 ) ) return deploysToKeep;
 
 			} catch ( error ) {
-				// console.log( error );
+				// continue
 			}
 			return deploysToKeep;
-		}
-
-		function onTransactionComplete ( error, committed, snapshot ) {
-			if ( error ) return callback( error )
-			else if ( !committed ) return callback( 'Transaction returned undefined.' )
-			else return callback( null, snapshot.val() )
 		}
 
 		/**
@@ -442,22 +304,24 @@ function Deploys ( firebaseRootRef ) {
 	 * @param  {objects}   opts
 	 * @param  {string}    opts.siteName
 	 * @param  {string}    opts.key
-	 * @param  {Function}  callback
 	 * @return {undefined}
 	 */
-	function setDefaultFirebaseConfiguration ( opts, callback ) {
+	async function setDefaultFirebaseConfiguration (opts) {
 		var validatedOptions = areValidDefaultBucketOpts( opts )
-		if ( validatedOptions instanceof Error ) return callback( validatedOptions )
+		if (validatedOptions instanceof Error) throw validatedOptions
 
-		var defaultDeployConfiguration = defaultConfiguration( opts.siteName )
+		var deploys = defaultConfiguration(opts.siteName)
 
 		const { siteName, key } = opts
 		const keyString = deploysKeyString({ siteName, key })
 		const keyChild = child(firebaseRootRef, keyString)
 
-		set(keyChild, defaultDeployConfiguration)
-			.then(() => onSetComplete())
-			.catch(error => onSetComplete(error))
+		await set(keyChild, deploys)
+		return {
+			siteName: opts.siteName,
+			key: opts.key,
+			deploys,
+		}
 
 		/**
 		 * @param  {object?}     opts
@@ -489,19 +353,6 @@ function Deploys ( firebaseRootRef ) {
 			}
 
 			return isValid;
-		}
-
-		/**
-		 * Used to propogate the error to the callback or
-		 * if there is no error, return the configuration that
-		 * was set.
-		 * 
-		 * @param  {null|Error} error
-		 * @return {undefined}
-		 */
-		function onSetComplete ( error ) {
-			if ( error ) return callback( error )
-			else return callback( null, defaultDeployConfiguration )
 		}
 	}
 
