@@ -76,7 +76,7 @@ function Deploys ( firebaseRootRef ) {
 		try {
 			const deployConfigurationSnapshot = await get(keyChild)
 			const deployConfiguration = deployConfigurationSnapshot.val()
-			if (areValidDeploys(firebaseConfiguration)) return deployConfiguration
+			if (areValidDeploys(deployConfiguration)) return deployConfiguration
 			else return defaultConfiguration(siteName)
 		}
 		catch (error) {
