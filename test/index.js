@@ -19,8 +19,6 @@ var test = require('tape')
 
 test.onFinish(process.exit)
 
-
-
 var siteName = process.env.SITE_NAME;
 var firebaseOptions = {
   apiKey: process.env.FIREBASE_API_KEY,
@@ -31,15 +29,17 @@ var firebaseOptions = {
 const email = process.env.WEBHOOK_EMAIL
 const password = process.env.WEBHOOK_PASSWORD
 
-test( 'deploys-connection', async ( t ) => {
+test( 'deploys-connection', async (t) => {
 	const app = initializeApp(firebaseOptions)
 	const dbRef = ref(getDatabase(app))
 	const auth = getAuth(app)
 
 	const deployConfig = Deploys(dbRef)
+	t.ok(true, 'Initialized')
 
 	try {
 		await signInWithEmailAndPassword(auth, email, password)
+		t.ok(true, 'Signed in')
 
 		let configuration = await deployConfig.get({ siteName })
 		t.deepEqual(configuration.deploys, deployConfig.default(siteName), 'Matching default configuration.')
