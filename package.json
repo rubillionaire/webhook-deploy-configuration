@@ -12,9 +12,11 @@
     "node": ">= 16.4",
     "npm": ">= 7.18"
   },
+  "dependencies": {
+    "firebase": "^9.9.0"
+  },
   "devDependencies": {
     "dotenv-safe": "^5.0.1",
-    "firebase": "^9.9.0",
     "tape": "^5.3.1"
   }
 }
