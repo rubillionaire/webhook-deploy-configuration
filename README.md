@@ -1,38 +1,46 @@
 # webhook-deploy-configuration
 
-Get / set webhook deploy configuration, given a Webhook Firebase root. Where deploy configuration is an array of objects with a `branch` & `bucket`key. The `branch` corresponds to the git branch of templates used, and the `bucket` is the destination for the built templates to reside.
+Get / set webhook site deploy configuration, given a Webhook Firebase root. Where deploy configuration is an array of objects with a `branch` & `bucket` key. The `branch` corresponds to the git branch of templates used, and the `bucket` is the destination for the built templates to reside.
 
 ```javascript
-var Firebase = require('firebase');
-var Deploys = require('webhook-deploy-configuration');
+const { initializeApp } = require("firebase/app")
+const {
+  getDatabase,
+  ref,
+} = require("firebase/database")
+const Deploys = require('webhook-deploy-configuration')
 
-var firebaseUrl = 'my-webhook-project';
-var bucketsRoot = new firebase('https://' + firebaseUrl +  '.firebaseio.com/buckets');
+const app = initializeApp({
+  apiKey,
+  authDomain: `${firebaseName}.firebaseapp.com`,
+  databaseURL: `https://${firebaseName}.firebaseio.com`,
+  projectId,
+})
 
-var deploys = Deploys( bucketsRoot );
+const deploys = Deploys(ref(getDatabase(app)));
 
-var siteName = 'my-webhook-site';
-deploys.get( { siteName: siteName }, function ( error, configuration ) {
-  // error: Error | null
-  // configuration: { siteName, key, deploys: [ { branch, bucket } ] } | null
-} )
+;(async () => {
+  const siteName = 'my-webhook-site';
+  const config = await deploys.get({ siteName })
+  // config : { siteName, key, deploys: [{ bucket, branch }] }
+})()
 ```
 
 ### API
 
 **get**
 Returns all deploy configuration for a site.
-`get( { siteName, key? }, function ( error, configuration ) {  } )`
+`get({ siteName, key? }) => config : { siteName, key, deploys: [{ bucket, branch }] }`
 
 
 **set**
 Sets deploy configuration for a site & branch.
-`set( { siteName, key, deploys: [ { branch, bucket } ] }, function ( error, configuration ) {  } )`
+`set({ siteName, key, deploys: [ { branch, bucket } ] }) => config : { siteName, key, deploys: [{ bucket, branch }] }`
 
 
 **setBucket**
 Sets an individual deploy destination with the unique key of `bucket`.
-`setBucket( { siteName, key, deploy: { branch, bucket } }, function ( error, configuration ) { } )`
+`setBucket({ siteName, key, deploy: { branch, bucket } }) => config : { siteName, key, deploys: [{ bucket, branch }] }`
 
 
 **default**
@@ -42,12 +50,12 @@ Returns the default deploy configuration for a site name.
 
 **setDefault**
 Sets the default deploy configuration for a site.
-`setDefault( { siteName, key }, function ( error, [ { branch, bucket } ] ) { } )`
+`setDefault({ siteName, key }) => config : { siteName, key, deploys: [{ bucket, branch }] }`
 
 
 **removeBucket**
 Removes the deploy configuration
-`removeBucket( { siteName, key, bucket }, function ( error, [ { branch, bucket }? ] ) { } )`
+`removeBucket({ siteName, key, bucket }) => config : { siteName, key, deploys: [{ bucket, branch }] }`
 
 ### Tests
 
