@@ -1,6 +1,6 @@
 {
   "name": "webhook-deploy-configuration",
-  "version": "3.0.6",
+  "version": "4.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -9,11 +9,11 @@
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": ">= 16.4",
-    "npm": ">= 7.18"
+    "node": ">= 20.14",
+    "npm": ">= 10.7"
   },
   "dependencies": {
-    "firebase": "^9.9.0"
+    "firebase": "^11.1.0"
   },
   "devDependencies": {
     "dotenv-safe": "^5.0.1",
