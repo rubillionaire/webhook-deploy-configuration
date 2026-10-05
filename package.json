@@ -9,11 +9,11 @@
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": ">= 20.14",
-    "npm": ">= 10.7"
+    "node": ">= 22.13.0",
+    "npm": ">= 11"
   },
   "dependencies": {
-    "firebase": "^11.1.0"
+    "firebase": "^12.19.0"
   },
   "devDependencies": {
     "dotenv-safe": "^5.0.1",
